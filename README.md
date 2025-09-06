@@ -8,9 +8,10 @@ It will let you specify a list of traders to follow, along with some filtering c
 
 ```sh
 git clone https://github.com/Yann-J/polymarket-copycat && cd polymarket-copycat
-venv init
-./venv/bin/pip install -r requirements.txt
-./venv/bin/python run.py
+# Create virtual env to install requirements locally
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ## Usage
