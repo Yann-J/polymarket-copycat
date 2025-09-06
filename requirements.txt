@@ -1,7 +1,7 @@
 # Core dependencies for Polymarket Copy Trading Bot
 
-# Polymarket CLOB client
-py-clob-client==0.0.1
+# Polymarket CLOB client (let pip resolve dependencies)
+py-clob-client
 
 # Testing framework
 pytest==7.4.3

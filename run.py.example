@@ -1,26 +1,9 @@
-# polymarket-copycat
-
-This is a bot designed to selectively replicate bets from successful traders on [Polymarket](https://polymarket.com)
-
-It will let you specify a list of traders to follow, along with some filtering criteria (on categories and transaction size), as well as a scaling ratio for your transactions.
-
-## Installation
-
-```sh
-git clone && cd 
-venv init
-./venv/bin/pip install -r requirements.txt
-./venv/bin/python run.py
-```
-
-## Usage
-
-Create a `run.py` with content similar to `run.py.example`, or from the below snippet:
-
-```py
 # -*- coding: utf-8 -*-
+"""Run script for Polymarket Copy Trading Bot."""
+
 import asyncio
 from polymarket_copy_trading_bot import PolymarketCopyTradingBot
+
 
 async def main():
     config = {
@@ -61,12 +44,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-```
-
-```sh
-python run.py
-```
-
-## Who to follow?
-
-See the [Leaderboard](https://polymarket.com/leaderboard) to get some inspo of who to follow...

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Polymarket Copy Trading Bot.
 
 A sophisticated copy trading bot that monitors successful traders on Polymarket
@@ -179,9 +180,6 @@ class PolymarketCopyTradingBot:
 
         # Initialize CLOB client
         self._initialize_clob_client()
-
-        # Initialize trader data
-        self._initialize_trader_data()
 
         # Initialize bot state
         self._initialize_bot_state()
@@ -575,8 +573,20 @@ class PolymarketCopyTradingBot:
             asyncio.create_task(self.risk_monitoring()),
         ]
 
-        # Run all tasks
-        await asyncio.gather(*monitoring_tasks, *management_tasks)
+        # Run all tasks with proper KeyboardInterrupt handling
+        try:
+            await asyncio.gather(*monitoring_tasks, *management_tasks)
+        except KeyboardInterrupt:
+            self.logger.info("KeyboardInterrupt received, stopping bot...")
+            self.running = False
+            # Cancel all tasks
+            all_tasks = monitoring_tasks + management_tasks
+            for task in all_tasks:
+                if not task.done():
+                    task.cancel()
+            # Wait for tasks to complete cancellation
+            await asyncio.gather(*all_tasks, return_exceptions=True)
+            raise
 
     async def manage_active_trades(self) -> None:
         """Manage active copy trades.
