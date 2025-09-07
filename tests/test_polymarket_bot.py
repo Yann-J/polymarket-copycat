@@ -9,6 +9,8 @@ from polymarket_copy_trading_bot import (
     TraderProfile,
     TradeEvent,
     CopyRule,
+    LeadFoundCallback,
+    TransactionCallback,
 )
 
 
@@ -324,6 +326,152 @@ class TestPolymarketCopyTradingBot:
         bot.running = True
         await bot.stop()
         assert bot.running is False
+
+    def test_set_lead_found_callback(self, bot):
+        """Test setting lead found callback."""
+        callback = Mock()
+        bot.set_lead_found_callback(callback)
+        assert bot.lead_found_callback == callback
+
+    def test_set_transaction_callback(self, bot):
+        """Test setting transaction callback."""
+        callback = Mock()
+        bot.set_transaction_callback(callback)
+        assert bot.transaction_callback == callback
+
+    def test_lead_found_callback_invocation(self, bot):
+        """Test that lead found callback is invoked when a lead is found."""
+        callback = Mock()
+        bot.set_lead_found_callback(callback)
+
+        # Add a trader to copy
+        trader_address = "0x123"
+        bot.add_trader_to_copy(trader_address=trader_address)
+
+        # Create a valid trade event
+        trade_event = TradeEvent(
+            trader_address=trader_address,
+            market_id="market_123",
+            token_id="token_123",
+            side="BUY",
+            amount=100.0,
+            price=0.6,
+            timestamp=datetime.now(timezone.utc),
+            market_question="Test question",
+            outcome="Yes",
+        )
+
+        copy_rule = bot.copy_rules[trader_address]
+
+        # Mock the helper methods
+        with patch.object(
+            bot, "get_market_category", return_value="Politics"
+        ), patch.object(bot, "get_market_liquidity", return_value=5000.0), patch.object(
+            bot, "get_daily_copied_amount", return_value=0.0
+        ), patch.object(
+            bot, "calculate_copy_amount", return_value=50.0
+        ):
+
+            # Process the trade
+            bot.process_trader_trade(trade_event)
+
+            # Verify callback was called
+            callback.assert_called_once_with(trade_event, copy_rule)
+
+    def test_transaction_callback_invocation(self, bot):
+        """Test that transaction callback is invoked when a transaction is made."""
+        callback = Mock()
+        bot.set_transaction_callback(callback)
+
+        # Add a trader to copy
+        trader_address = "0x123"
+        bot.add_trader_to_copy(trader_address=trader_address)
+
+        # Create a valid trade event
+        trade_event = TradeEvent(
+            trader_address=trader_address,
+            market_id="market_123",
+            token_id="token_123",
+            side="BUY",
+            amount=100.0,
+            price=0.6,
+            timestamp=datetime.now(timezone.utc),
+            market_question="Test question",
+            outcome="Yes",
+        )
+
+        # Mock the helper methods
+        with patch.object(
+            bot, "get_market_category", return_value="Politics"
+        ), patch.object(bot, "get_market_liquidity", return_value=5000.0), patch.object(
+            bot, "get_daily_copied_amount", return_value=0.0
+        ), patch.object(
+            bot, "calculate_copy_amount", return_value=50.0
+        ), patch.object(
+            bot, "execute_copy_trade"
+        ) as mock_execute:
+
+            # Process the trade
+            bot.process_trader_trade(trade_event)
+
+            # Verify execute_copy_trade was called
+            mock_execute.assert_called_once_with(trade_event, 50.0)
+
+    def test_callback_error_handling(self, bot):
+        """Test that callback errors are handled gracefully."""
+        callback = Mock(side_effect=Exception("Callback error"))
+        bot.set_lead_found_callback(callback)
+
+        # Add a trader to copy
+        trader_address = "0x123"
+        bot.add_trader_to_copy(trader_address=trader_address)
+
+        # Create a valid trade event
+        trade_event = TradeEvent(
+            trader_address=trader_address,
+            market_id="market_123",
+            token_id="token_123",
+            side="BUY",
+            amount=100.0,
+            price=0.6,
+            timestamp=datetime.now(timezone.utc),
+            market_question="Test question",
+            outcome="Yes",
+        )
+
+        # Mock the helper methods
+        with patch.object(
+            bot, "get_market_category", return_value="Politics"
+        ), patch.object(bot, "get_market_liquidity", return_value=5000.0), patch.object(
+            bot, "get_daily_copied_amount", return_value=0.0
+        ), patch.object(
+            bot, "calculate_copy_amount", return_value=50.0
+        ), patch.object(
+            bot, "execute_copy_trade"
+        ) as mock_execute:
+
+            # Process the trade - should not raise exception
+            bot.process_trader_trade(trade_event)
+
+            # Verify callback was called despite error
+            callback.assert_called_once()
+            # Verify execute_copy_trade was still called
+            mock_execute.assert_called_once_with(trade_event, 50.0)
+
+    def test_bot_initialization_with_callbacks(self):
+        """Test bot initialization with callbacks."""
+        lead_callback = Mock()
+        transaction_callback = Mock()
+
+        bot = PolymarketCopyTradingBot(
+            host="https://test.polymarket.com",
+            private_key=None,
+            lead_found_callback=lead_callback,
+            transaction_callback=transaction_callback,
+        )
+
+        assert bot.lead_found_callback == lead_callback
+        assert bot.transaction_callback == transaction_callback
 
 
 class TestEdgeCases:

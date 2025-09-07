@@ -2,14 +2,15 @@
 """Polymarket Copy Trading Bot.
 
 A sophisticated copy trading bot that monitors successful traders on Polymarket
-and automatically replicates their trading strategies with configurable risk management.
+and automatically replicates their trading strategies with configurable risk
+management.
 """
 
 import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Callable, Optional
 
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import OrderArgs, OrderType
@@ -123,6 +124,11 @@ class CopyRule:
     active: bool
 
 
+# Callback function type definitions
+LeadFoundCallback = Callable[[TradeEvent, CopyRule], None]
+TransactionCallback = Callable[[Dict[str, Any], str], None]
+
+
 class PolymarketCopyTradingBot:
     """Advanced copy trading bot for Polymarket.
 
@@ -135,6 +141,7 @@ class PolymarketCopyTradingBot:
         - Real-time trade execution
         - Performance tracking and analytics
         - Trader ranking and discovery
+        - Custom callback support for events
 
     Attributes:
         host: Polymarket CLOB API host URL.
@@ -152,6 +159,8 @@ class PolymarketCopyTradingBot:
         max_concurrent_copies: Maximum concurrent copy trades.
         running: Whether the bot is currently running.
         logger: Logger instance for the bot.
+        lead_found_callback: Optional callback for when a lead is found.
+        transaction_callback: Optional callback for when transactions are made.
     """
 
     def __init__(
@@ -161,6 +170,8 @@ class PolymarketCopyTradingBot:
         funder_address: str = None,
         chain_id: int = 137,
         signature_type: int = 1,
+        lead_found_callback: Optional[LeadFoundCallback] = None,
+        transaction_callback: Optional[TransactionCallback] = None,
     ) -> None:
         """Initialize the copy trading bot.
 
@@ -170,6 +181,10 @@ class PolymarketCopyTradingBot:
             funder_address: Funder address for proxy wallet.
             chain_id: Blockchain chain ID (137 for Polygon).
             signature_type: Signature type for orders.
+            lead_found_callback: Optional callback function called when a
+                lead is found.
+            transaction_callback: Optional callback function called when
+                transactions are made.
         """
 
         self.host = host
@@ -177,6 +192,8 @@ class PolymarketCopyTradingBot:
         self.funder_address = funder_address
         self.chain_id = chain_id
         self.signature_type = signature_type
+        self.lead_found_callback = lead_found_callback
+        self.transaction_callback = transaction_callback
 
         # Initialize CLOB client
         self._initialize_clob_client()
@@ -250,8 +267,8 @@ class PolymarketCopyTradingBot:
             copy_sells: Whether to copy sell orders.
         """
 
-        if categories_filter is None:
-            categories_filter = ["Politics", "Sports", "Crypto", "Entertainment"]
+        # if categories_filter is None:
+        #     categories_filter = ["Politics", "Sports", "Crypto", "Entertainment"]
 
         copy_rule = CopyRule(
             trader_address=trader_address,
@@ -269,6 +286,24 @@ class PolymarketCopyTradingBot:
 
         self.copy_rules[trader_address] = copy_rule
         self.logger.info("Added trader %s to copy list", trader_address)
+
+    def set_lead_found_callback(self, callback: LeadFoundCallback) -> None:
+        """Set the callback function for when a lead is found.
+
+        Args:
+            callback: Function to call when a lead is found.
+        """
+        self.lead_found_callback = callback
+        self.logger.info("Lead found callback set")
+
+    def set_transaction_callback(self, callback: TransactionCallback) -> None:
+        """Set the callback function for when transactions are made.
+
+        Args:
+            callback: Function to call when transactions are made.
+        """
+        self.transaction_callback = callback
+        self.logger.info("Transaction callback set")
 
     async def monitor_trader_activity(self, trader_address: str) -> None:
         """Monitor a specific trader's activity via blockchain/API.
@@ -322,6 +357,13 @@ class PolymarketCopyTradingBot:
             copy_amount = self.calculate_copy_amount(trade_event, copy_rule)
             if copy_amount <= 0:
                 return
+
+            # Invoke lead found callback if provided
+            if self.lead_found_callback:
+                try:
+                    self.lead_found_callback(trade_event, copy_rule)
+                except Exception as e:
+                    self.logger.error("Error in lead found callback: %s", e)
 
             # Execute copy trade
             await self.execute_copy_trade(trade_event, copy_amount)
@@ -480,8 +522,15 @@ class PolymarketCopyTradingBot:
 
                 self.active_trades.append(copy_trade)
 
+                # Invoke transaction callback if provided
+                if self.transaction_callback:
+                    try:
+                        self.transaction_callback(copy_trade, "executed")
+                    except Exception as e:
+                        self.logger.error("Error in transaction callback: %s", e)
+
                 self.logger.info(
-                    "Copy trade executed: $%.2f following %s " "in market %s",
+                    "Copy trade executed: $%.2f following %s in market %s",
                     copy_amount,
                     trade_event.trader_address,
                     trade_event.market_question,
@@ -606,6 +655,16 @@ class PolymarketCopyTradingBot:
                         ).total_seconds()
                         if age > DEFAULT_TRADE_FILL_TIMEOUT:
                             trade["status"] = "filled"
+
+                            # Invoke transaction callback if provided
+                            if self.transaction_callback:
+                                try:
+                                    self.transaction_callback(trade, "filled")
+                                except Exception as e:
+                                    self.logger.error(
+                                        "Error in transaction callback: %s", e
+                                    )
+
                             self.logger.info("Copy trade filled: %s", trade["order_id"])
 
                 await asyncio.sleep(DEFAULT_TRADE_CHECK_INTERVAL)
@@ -688,7 +747,7 @@ class PolymarketCopyTradingBot:
                 "total_volume_copied": total_volume,
                 "estimated_pnl": total_pnl,
                 "daily_spent": daily_spent,
-                "daily_budget_remaining": self.max_daily_budget - daily_spent,
+                "daily_budget_remaining": (self.max_daily_budget - daily_spent),
                 "active_traders_followed": len(
                     [r for r in self.copy_rules.values() if r.active]
                 ),
